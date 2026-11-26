@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Earth Papertrails · 地球折纸足迹</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <canvas id="stage" tabindex="0"></canvas>
+
+    <div id="hud">
+      <!-- Top Bar -->
+      <header class="top-bar">
+        <div class="breadcrumbs" id="breadcrumbs">
+          <button class="crumb-btn active" data-stage="bookshelf" title="返回书房书架">
+            <span class="crumb-icon">📚</span>
+            <span>书房书架</span>
+          </button>
+          <span class="crumb-sep hidden" id="sep-book">›</span>
+          <button class="crumb-btn hidden" id="crumb-book" data-stage="book">
+            <span id="crumb-book-title">折纸绘本</span>
+          </button>
+          <span class="crumb-sep hidden" id="sep-world">›</span>
+          <span class="crumb-current hidden" id="crumb-world-title">微缩探索</span>
+        </div>
+
+        <div class="top-actions">
+          <button class="pill-btn" id="btn-passport" title="查看我的地球足迹护照">
+            <span class="passport-mini-icon">🪪</span>
+            <span>Passport</span>
+            <span class="badge-count" id="passport-count">0/48</span>
+          </button>
+          <button class="icon-btn" id="btn-daynight" title="切换昼夜 (N)">
+            <span id="daynight-icon">☀</span>
+          </button>
+          <button class="icon-btn" id="btn-audio" title="音效开关 (M)">
+            <span id="audio-icon">🔊</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Stage 1: Bookshelf Speech-Bubble Tooltip & Subtle Bottom Hint -->
+      <div class="stage-layer" id="ui-bookshelf">
+        <div class="book-tooltip hidden" id="book-tooltip">
+          <div class="tooltip-tail"></div>
+          <div class="tooltip-title" id="tooltip-title">《东方物语》</div>
+          <div class="tooltip-sub" id="tooltip-sub">8/12 Footprints · Click to Open</div>
+        </div>
+        <div class="shelf-footer-hint">
+          悬停书脊查看足迹 · 点击取出书本展开 · 点击地球仪打开护照 · 点击台灯切换昼夜
+        </div>
+      </div>
+
+      <!-- Stage 2: Pop-up Carousel Book Controls -->
+      <div class="stage-layer hidden" id="ui-book">
+        <button class="page-arrow left" id="btn-prev-page" title="上一页 (←)">
+          <svg viewBox="0 0 36 24" width="28" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M31 12H5M12 5l-7 7 7 7" />
+          </svg>
+        </button>
+        <button class="page-arrow right" id="btn-next-page" title="下一页 (→)">
+          <svg viewBox="0 0 36 24" width="28" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h26M24 5l7 7-7 7" />
+          </svg>
+        </button>
+
+        <div class="book-caption-wrap">
+          <div class="book-dots" id="book-dots"></div>
+          <div class="handwritten-caption" id="scene-caption">kyoto shrine · 京都伏见鸟居</div>
+          <div class="scene-meta-line" id="scene-meta">34.9671° N, 135.7727° E · 足迹 0/3</div>
+          <div class="book-cta-row">
+            <button class="primary-cta" id="btn-enter-world">
+              <span>进入微缩场景探索</span>
+              <span class="cta-arrow">↗</span>
+            </button>
+          </div>
+          <div class="book-hint-sub">左右箭头 / 拖拽翻页 · 直接点击立体折纸场景亦可进入</div>
+        </div>
+      </div>
+
+      <!-- Stage 3: Walkable Paper World HUD -->
+      <div class="stage-layer hidden" id="ui-world">
+        <div class="world-scene-badge">
+          <div class="badge-coords" id="world-coords">34.9671° N, 135.7727° E</div>
+          <div class="badge-name" id="world-name">京都 · 伏见鸟居</div>
+          <div class="badge-spots" id="world-spots-pills"></div>
+          <div class="badge-scrap" id="world-scrap-status"></div>
+        </div>
+
+        <div class="world-controls-bar">
+          <button class="pill-btn secondary" id="btn-back-book">← 收回折纸绘本 (ESC)</button>
+          <button class="pill-btn secondary" id="btn-camera-view">视角: 跟随 (V)</button>
+        </div>
+
+        <div class="walk-hint" id="walk-hint">
+          WASD / 点击行走 · 点击足迹点或走近触发明信片 · 拾取压花纪念 · 右键旋转 · V 视角 · N 昼夜
+        </div>
+
+        <!-- Perforated Cardstock Postcard Drawer (matching ui_04_night_footprint_postcard.png) -->
+        <aside class="postcard-drawer hidden" id="postcard-drawer">
+          <button class="drawer-close" id="btn-close-drawer" title="关闭">✕</button>
+
+          <div class="postcard-top-row">
+            <span class="postcard-header-title">地球足迹明信片</span>
+            <div class="postmark-seal" id="card-seal" title="足迹邮戳">
+              <svg viewBox="0 0 110 72" width="102" height="66" aria-hidden="true">
+                <g class="seal-waves" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                  <path d="M2 24 Q10 19 18 24 T34 24" />
+                  <path d="M2 34 Q10 29 18 34 T34 34" />
+                  <path d="M2 44 Q10 39 18 44 T34 44" />
+                </g>
+                <circle cx="72" cy="36" r="28" fill="none" stroke="currentColor" stroke-width="2.2" />
+                <circle cx="72" cy="36" r="21" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="3 2" />
+                <text x="72" y="24" text-anchor="middle" font-size="7" font-weight="700" fill="currentColor" letter-spacing="1.2">PAPERTRAILS</text>
+                <text x="72" y="42" text-anchor="middle" font-size="16" id="card-glyph-svg">⛩</text>
+                <text x="72" y="54" text-anchor="middle" font-size="6.5" font-weight="700" fill="currentColor">POSTMARK</text>
+              </svg>
+            </div>
+          </div>
+
+          <h2 class="postcard-title" id="card-title">千本鸟居</h2>
+          <div class="postcard-coords-line">
+            <span id="card-coords">34.9671° N, 135.7727° E</span>
+            <span>·</span>
+            <input type="date" id="diary-date" class="inline-date" />
+          </div>
+          <p class="postcard-story" id="card-story"></p>
+
+          <!-- Visual Keepsake Collage: Thumbtacked Polaroid + Washi-taped Botanical Keepsake -->
+          <div class="collage-row">
+            <label class="polaroid-card" id="polaroid-trigger" title="点击上传你的真实旅行照片">
+              <span class="brass-tack"></span>
+              <img id="polaroid-img" alt="旅行拍立得" />
+              <span class="polaroid-caption" id="polaroid-label">点击贴上旅行照片</span>
+              <input type="file" id="polaroid-upload" accept="image/*" class="hidden" />
+            </label>
+
+            <div class="keepsake-slot" id="keepsake-slot">
+              <div class="washi-tape"></div>
+              <div class="keepsake-art" id="keepsake-art"></div>
+              <div class="keepsake-name" id="keepsake-name">压花纪念</div>
+            </div>
+          </div>
+
+          <div class="diary-ruled-wrap">
+            <textarea id="diary-note" rows="3" placeholder="在这里写下你的旅行随笔、风声或那天的天气..."></textarea>
+          </div>
+
+          <div class="postcard-actions">
+            <button class="primary-cta stamp-btn" id="btn-collect-stamp">盖章收录足迹 ✓</button>
+          </div>
+          <div class="stamp-status" id="stamp-status"></div>
+        </aside>
+      </div>
+
+      <!-- Passport Modal -->
+      <div class="modal-backdrop hidden" id="passport-modal">
+        <div class="passport-sheet">
+          <div class="passport-head">
+            <div>
+              <div class="eyebrow">PASSPORT OF EARTH PAPERTRAILS</div>
+              <h2>我的地球足迹护照</h2>
+            </div>
+            <div class="passport-summary">
+              <span id="modal-total-stamps">0 / 48 枚足迹印章</span>
+              <button class="pill-btn secondary small" id="btn-export-json">导出存档</button>
+              <label class="pill-btn secondary small">
+                导入存档
+                <input type="file" id="input-import-json" accept="application/json" class="hidden" />
+              </label>
+              <button class="pill-btn small" id="btn-open-creator">+ 新建足迹册</button>
+              <button class="drawer-close" id="btn-close-passport">✕</button>
+            </div>
+          </div>
+          <div class="passport-grid" id="passport-grid"></div>
+        </div>
+      </div>
+
+      <!-- Create Custom Footprint Book Modal -->
+      <div class="modal-backdrop hidden" id="creator-modal">
+        <div class="creator-sheet">
+          <div class="passport-head">
+            <div>
+              <div class="eyebrow">CUSTOM POP-UP BOOK STUDIO</div>
+              <h2>装帧我的新折纸足迹册</h2>
+            </div>
+            <button class="drawer-close" id="btn-close-creator">✕</button>
+          </div>
+          <form id="creator-form" class="creator-form">
+            <div class="form-row">
+              <div class="form-field">
+                <label for="new-book-title">绘本名称</label>
+                <input type="text" id="new-book-title" required placeholder="例如：《2026 川滇秋行记》" maxlength="20" />
+              </div>
+              <div class="form-field">
+                <label for="new-book-region">副标题 / 英文标签</label>
+                <input type="text" id="new-book-region" placeholder="例如：Autumn Diary" maxlength="24" />
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label>封面卡纸色系</label>
+              <div class="color-swatches" id="color-swatches">
+                <button type="button" class="swatch active" data-color="#b9603f" style="background:#b9603f" title="赤陶"></button>
+                <button type="button" class="swatch" data-color="#d9a441" style="background:#d9a441" title="赭黄"></button>
+                <button type="button" class="swatch" data-color="#4f6b4a" style="background:#4f6b4a" title="松绿"></button>
+                <button type="button" class="swatch" data-color="#5e9c9a" style="background:#5e9c9a" title="水鸭青"></button>
+                <button type="button" class="swatch" data-color="#c98374" style="background:#c98374" title="粉灰玫瑰"></button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label for="new-scene-name">首站场景名称</label>
+                <input type="text" id="new-scene-name" required placeholder="例如：丽江 · 古城石桥" maxlength="22" />
+              </div>
+              <div class="form-field">
+                <label for="new-scene-coords">经纬度 / 坐标备注</label>
+                <input type="text" id="new-scene-coords" placeholder="例如：26.8721° N, 100.2299° E" maxlength="32" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-field">
+                <label for="new-scene-biome">折纸地貌模板</label>
+                <select id="new-scene-biome">
+                  <option value="coastal">海滨港湾 · Coastal</option>
+                  <option value="mountain">雪山营地 · Alpine</option>
+                  <option value="sakura">东方花巷 · Blossom</option>
+                  <option value="nighttown">星夜灯火 · Night Town</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="new-spot-name">核心打卡地标</label>
+                <input type="text" id="new-spot-name" required placeholder="例如：四方街纸灯笼" maxlength="20" />
+              </div>
+            </div>
+
+            <div class="creator-actions">
+              <button type="submit" class="primary-cta">装帧上架并展开书页 ↗</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Toast Notification -->
+      <div class="paper-toast hidden" id="paper-toast"></div>
+
+      <!-- Screen Transition Veil -->
+      <div class="transition-veil" id="transition-veil"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
