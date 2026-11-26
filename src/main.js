@@ -17,7 +17,8 @@ const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: 'high-performance',
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const maxPixelRatio = () => (window.innerWidth < 768 ? 1.5 : 2);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio()));
 renderer.setSize(window.innerWidth, window.innerHeight, false);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true;
@@ -97,10 +98,32 @@ const hud = createHud({
     enterWorld(sc);
   },
   onBookCreated(newBook) {
-    bookshelfStage.setBooks(getShelfBooks());
+    const list = getShelfBooks();
+    bookshelfStage.setBooks(list);
+    hud.setMobileShelfBooks(list);
     if (newBook) {
       enterBook(newBook, 0);
     }
+  },
+  onOpenTooltipBook() {
+    bookshelfStage.openHoveredBook();
+  },
+  onSelectMobileBook(idx, isSame) {
+    const list = getShelfBooks();
+    const book = list[idx];
+    if (!book) return;
+    if (book.isCreator) {
+      hud.openCreator();
+      return;
+    }
+    if (isSame) {
+      bookshelfStage.openHoveredBook();
+    } else {
+      bookshelfStage.previewBookByIndex(idx, camera, canvas);
+    }
+  },
+  onJoystickMove(jx, jz) {
+    worldStage.setJoystickInput(jx, jz);
   },
 });
 
@@ -125,7 +148,9 @@ const bookshelfStage = createBookshelfStage({
     hud.setDayNightState(night);
   },
 });
-bookshelfStage.setBooks(getShelfBooks());
+const initialShelfBooks = getShelfBooks();
+bookshelfStage.setBooks(initialShelfBooks);
+hud.setMobileShelfBooks(initialShelfBooks);
 
 const bookStage = createBookStage({
   materials,
@@ -249,13 +274,25 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('pointermove', (e) => {
-  if (activeStageName === 'bookshelf') bookshelfStage.onPointerMove(e, canvas, camera);
-  else if (activeStageName === 'book') bookStage.onPointerMove(e, canvas, camera);
-  else worldStage.onPointerMove(e, canvas, camera);
+  const onCanvas = e.target === canvas;
+  if (activeStageName === 'bookshelf') {
+    if (onCanvas) bookshelfStage.onPointerMove(e, canvas, camera);
+  } else if (activeStageName === 'book') {
+    bookStage.onPointerMove(e, canvas, camera);
+  } else {
+    if (onCanvas) worldStage.onPointerMove(e, canvas, camera);
+  }
 });
 
 window.addEventListener('pointerup', (e) => {
-  if (activeStageName === 'book') bookStage.onPointerUp(e, canvas, camera);
+  if (activeStageName === 'bookshelf') bookshelfStage.onPointerUp(e, canvas, camera);
+  else if (activeStageName === 'book') bookStage.onPointerUp(e, canvas, camera);
+  else if (activeStageName === 'world') worldStage.onPointerUp(e);
+});
+
+window.addEventListener('pointercancel', (e) => {
+  if (activeStageName === 'bookshelf') bookshelfStage.onPointerUp(e, canvas, camera);
+  else if (activeStageName === 'book') bookStage.onPointerUp(e, canvas, camera);
   else if (activeStageName === 'world') worldStage.onPointerUp(e);
 });
 
@@ -308,7 +345,7 @@ window.addEventListener('resize', () => {
   const h = Math.max(1, window.innerHeight);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio()));
   renderer.setSize(w, h, false);
 });
 

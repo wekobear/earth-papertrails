@@ -36,6 +36,9 @@ export function createHud({
   onCollectStamp,
   onJumpToScene,
   onBookCreated,
+  onOpenTooltipBook,
+  onSelectMobileBook,
+  onJoystickMove,
 }) {
   const el = {
     breadcrumbs: document.getElementById('breadcrumbs'),
@@ -55,6 +58,8 @@ export function createHud({
     tooltip: document.getElementById('book-tooltip'),
     tooltipTitle: document.getElementById('tooltip-title'),
     tooltipSub: document.getElementById('tooltip-sub'),
+    btnTooltipOpen: document.getElementById('btn-tooltip-open'),
+    mobileBookStrip: document.getElementById('mobile-book-strip'),
 
     uiBook: document.getElementById('ui-book'),
     btnPrevPage: document.getElementById('btn-prev-page'),
@@ -71,6 +76,8 @@ export function createHud({
     worldScrapStatus: document.getElementById('world-scrap-status'),
     btnBackBook: document.getElementById('btn-back-book'),
     btnCameraView: document.getElementById('btn-camera-view'),
+    mobileJoystick: document.getElementById('mobile-joystick'),
+    joystickNub: document.getElementById('joystick-nub'),
 
     drawer: document.getElementById('postcard-drawer'),
     btnCloseDrawer: document.getElementById('btn-close-drawer'),
@@ -109,6 +116,7 @@ export function createHud({
 
   let activeSpot = null;
   let activeScene = null;
+  let activeTooltipBookId = null;
   let selectedSwatchColor = '#b9603f';
   let toastTimer = null;
 
@@ -234,7 +242,51 @@ export function createHud({
   el.btnEnterWorld.addEventListener('click', () => onEnterWorld?.());
   el.btnBackBook.addEventListener('click', () => onBackToBook?.());
   el.btnCameraView.addEventListener('click', () => onCycleView?.());
+  el.btnTooltipOpen.addEventListener('click', () => onOpenTooltipBook?.());
   el.btnCloseDrawer.addEventListener('click', () => el.drawer.classList.add('hidden'));
+
+  // Mobile Virtual Thumb Joystick
+  if (el.mobileJoystick && el.joystickNub) {
+    let joyPointerId = null;
+    const maxR = 26;
+    const updateJoystick = (clientX, clientY) => {
+      const rect = el.mobileJoystick.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      let dx = clientX - cx;
+      let dy = clientY - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > maxR) {
+        dx = (dx / dist) * maxR;
+        dy = (dy / dist) * maxR;
+      }
+      el.joystickNub.style.transform = `translate(${dx}px, ${dy}px)`;
+      onJoystickMove?.(dx / maxR, dy / maxR);
+    };
+    const resetJoystick = () => {
+      joyPointerId = null;
+      el.joystickNub.style.transform = 'translate(0px, 0px)';
+      onJoystickMove?.(0, 0);
+    };
+    el.mobileJoystick.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      joyPointerId = e.pointerId;
+      el.mobileJoystick.setPointerCapture?.(e.pointerId);
+      updateJoystick(e.clientX, e.clientY);
+    });
+    el.mobileJoystick.addEventListener('pointermove', (e) => {
+      if (e.pointerId !== joyPointerId) return;
+      e.preventDefault();
+      updateJoystick(e.clientX, e.clientY);
+    });
+    el.mobileJoystick.addEventListener('pointerup', (e) => {
+      if (e.pointerId === joyPointerId) resetJoystick();
+    });
+    el.mobileJoystick.addEventListener('pointercancel', (e) => {
+      if (e.pointerId === joyPointerId) resetJoystick();
+    });
+  }
 
   el.polaroidUpload.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
@@ -420,23 +472,52 @@ export function createHud({
       }
     },
 
+    setMobileShelfBooks(books) {
+      if (!el.mobileBookStrip) return;
+      el.mobileBookStrip.innerHTML = '';
+      books.forEach((book, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'mobile-shelf-pill';
+        btn.dataset.bookId = book.id;
+        btn.textContent = book.isCreator ? '+ 新建' : book.title.replace(/[《》]/g, '');
+        btn.addEventListener('click', () => {
+          const isSame = activeTooltipBookId === book.id;
+          onSelectMobileBook?.(idx, isSame);
+        });
+        el.mobileBookStrip.appendChild(btn);
+      });
+    },
+
     setTooltip(book, stampCount, screenPos) {
       if (!book) {
+        activeTooltipBookId = null;
         el.tooltip.classList.add('hidden');
+        for (const p of el.mobileBookStrip?.querySelectorAll('.mobile-shelf-pill') || []) {
+          p.classList.remove('active');
+        }
         return;
+      }
+      activeTooltipBookId = book.id;
+      for (const p of el.mobileBookStrip?.querySelectorAll('.mobile-shelf-pill') || []) {
+        p.classList.toggle('active', p.dataset.bookId === book.id);
       }
       el.tooltipTitle.textContent = book.title;
       if (book.isCreator) {
-        el.tooltipSub.textContent = '创建属于你的新折纸足迹册 · Click to Create';
+        el.tooltipSub.textContent = '创建属于你的新折纸足迹册';
+        el.btnTooltipOpen.textContent = '新建足迹册 →';
       } else {
         const total = book.scenes.reduce((s, sc) => s + sc.spots.length, 0);
-        el.tooltipSub.textContent = `${stampCount}/${total} Footprints · Click to Open`;
+        el.tooltipSub.textContent = `${stampCount}/${total} Footprints · 点击翻开`;
+        el.btnTooltipOpen.textContent = '翻开绘本 →';
       }
-      if (screenPos) {
+      if (screenPos && window.innerWidth > 768) {
         const x = Math.min(window.innerWidth - 250, Math.max(20, screenPos.x));
         const y = Math.min(window.innerHeight - 100, Math.max(90, screenPos.y));
         el.tooltip.style.left = `${x}px`;
         el.tooltip.style.top = `${y}px`;
+      } else {
+        el.tooltip.style.left = '';
+        el.tooltip.style.top = '';
       }
       el.tooltip.classList.remove('hidden');
     },
@@ -505,7 +586,7 @@ export function createHud({
     },
 
     setViewLabel(label) {
-      el.btnCameraView.textContent = `视角: ${label} (V)`;
+      el.btnCameraView.textContent = window.innerWidth <= 768 ? `视角: ${label}` : `视角: ${label} (V)`;
     },
 
     setDayNightState(isNight) {

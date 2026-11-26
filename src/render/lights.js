@@ -4,7 +4,9 @@ import { STAGE_PRESETS } from '../core/palette.js';
 export function createLights({ scene, glowMaterials }) {
   const key = new THREE.DirectionalLight('#ffd49e', 2.6);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const shadowSize = isMobile ? 1024 : 2048;
+  key.shadow.mapSize.set(shadowSize, shadowSize);
   key.shadow.bias = -0.0004;
   key.shadow.normalBias = 0.018;
   key.shadow.radius = 2.6;
@@ -15,7 +17,7 @@ export function createLights({ scene, glowMaterials }) {
 
   scene.add(key, key.target, fill, fill.target, hemi, accent);
   scene.background = new THREE.Color('#ece3d4');
-  scene.fog = new THREE.Fog('#ece3d4', 22, 54);
+  scene.fog = new THREE.Fog('#ece3d4', 36, 85);
 
   let mode = 'bookshelf';
   let nightTarget = 0;
@@ -37,9 +39,9 @@ export function createLights({ scene, glowMaterials }) {
       cam.top = 6.5;
       cam.bottom = -4.5;
       cam.near = 1;
-      cam.far = 34;
-      scene.fog.near = 20;
-      scene.fog.far = 45;
+      cam.far = 38;
+      scene.fog.near = 36;
+      scene.fog.far = 85;
     } else if (nextMode === 'book') {
       key.position.set(-7.0, 10.5, 6.8);
       key.target.position.set(0, 1.0, 0.2);
@@ -50,9 +52,9 @@ export function createLights({ scene, glowMaterials }) {
       cam.top = 5.8;
       cam.bottom = -4.5;
       cam.near = 1;
-      cam.far = 30;
-      scene.fog.near = 20;
-      scene.fog.far = 46;
+      cam.far = 34;
+      scene.fog.near = 36;
+      scene.fog.far = 85;
     } else {
       key.position.set(-10.5, 14, 7.8);
       key.target.position.set(0, 0.5, 0);
@@ -64,8 +66,8 @@ export function createLights({ scene, glowMaterials }) {
       cam.bottom = -12;
       cam.near = 1;
       cam.far = 42;
-      scene.fog.near = 24;
-      scene.fog.far = 56;
+      scene.fog.near = 36;
+      scene.fog.far = 85;
     }
     cam.updateProjectionMatrix();
     key.target.updateMatrixWorld();

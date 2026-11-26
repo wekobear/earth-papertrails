@@ -52,9 +52,16 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
   const VIEW_MODES = ['follow', 'macro', 'overview'];
   let viewIdx = 0;
   let cameraYaw = 0;
+  let zoomFactor = 1.0;
   let rightDragging = false;
   let lastRightX = 0;
   let lastAutoSpotId = null;
+  let joyX = 0;
+  let joyZ = 0;
+  const activePointers = new Map();
+  let pinchStartDist = 0;
+  let pinchStartZoom = 1.0;
+  let twoFingerMidX = 0;
 
   const HALF_BOUND = 5.3;
 
@@ -387,6 +394,23 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
 
   function onPointerDown(e, dom, camera) {
     if (!active) return;
+    if (e.pointerType === 'touch') {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size >= 2) {
+        // Cancel walk tap when 2nd finger enters for pinch/orbit
+        pointerWalking = false;
+        clickTarget = null;
+        clickRing.visible = false;
+        const pts = Array.from(activePointers.values());
+        pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        pinchStartZoom = zoomFactor;
+        twoFingerMidX = (pts[0].x + pts[1].x) * 0.5;
+        return;
+      }
+      pointerWalking = true;
+      setClickDestination(e, dom, camera);
+      return;
+    }
     if (e.button === 2) {
       rightDragging = true;
       lastRightX = e.clientX;
@@ -400,6 +424,18 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
 
   function onPointerMove(e, dom, camera) {
     if (!active) return;
+    if (e.pointerType === 'touch' && activePointers.has(e.pointerId)) {
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (activePointers.size >= 2) {
+        const pts = Array.from(activePointers.values());
+        const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
+        zoomFactor = Math.max(0.65, Math.min(1.5, pinchStartZoom * (pinchStartDist / dist)));
+        const midX = (pts[0].x + pts[1].x) * 0.5;
+        cameraYaw -= (midX - twoFingerMidX) * 0.007;
+        twoFingerMidX = midX;
+        return;
+      }
+    }
     if (rightDragging) {
       const dx = e.clientX - lastRightX;
       lastRightX = e.clientX;
@@ -421,6 +457,12 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
   }
 
   function onPointerUp(e) {
+    if (e.pointerType === 'touch') {
+      activePointers.delete(e.pointerId);
+      if (activePointers.size < 2) pinchStartDist = 0;
+      if (activePointers.size === 0) pointerWalking = false;
+      return;
+    }
     if (e.button === 2) rightDragging = false;
     pointerWalking = false;
   }
@@ -456,23 +498,35 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
       clickRingAge = 0;
     },
     refreshSpotVisuals,
+    setJoystickInput(x, z) {
+      joyX = x || 0;
+      joyZ = z || 0;
+    },
     enter(scene, camera) {
       active = true;
       entryTime = 0;
       viewIdx = 0;
       cameraYaw = 0;
+      zoomFactor = 1.0;
+      joyX = 0;
+      joyZ = 0;
+      activePointers.clear();
       keys.clear();
       buildSceneDiorama(scene);
       camera.fov = 34;
-      camera.position.set(0, 6.9, 9.8);
+      const aspectBoost = camera.aspect < 0.9 ? Math.min(1.55, 0.92 / Math.max(0.45, camera.aspect)) : 1;
+      camera.position.set(0, 6.9 * aspectBoost, 9.8 * aspectBoost);
       camera.lookAt(0, 0.35, 2.6);
       camera.updateProjectionMatrix();
     },
     leave() {
       active = false;
       keys.clear();
+      activePointers.clear();
       pointerWalking = false;
       rightDragging = false;
+      joyX = 0;
+      joyZ = 0;
       setGroundLightPools([], 0, 0);
     },
     onPointerDown,
@@ -505,6 +559,7 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
       if (keys.has('KeyD') || keys.has('ArrowRight')) kx += 1;
 
       const input = { x: 0, z: 0 };
+      const jLen = Math.hypot(joyX, joyZ);
       if (kx !== 0 || kz !== 0) {
         clickTarget = null;
         clickRing.visible = false;
@@ -512,6 +567,13 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
         const sin = Math.sin(cameraYaw);
         input.x = kx * cos + kz * sin;
         input.z = -kx * sin + kz * cos;
+      } else if (jLen > 0.08) {
+        clickTarget = null;
+        clickRing.visible = false;
+        const cos = Math.cos(cameraYaw);
+        const sin = Math.sin(cameraYaw);
+        input.x = joyX * cos + joyZ * sin;
+        input.z = -joyX * sin + joyZ * cos;
       } else if (clickTarget) {
         const dx = clickTarget.x - traveller.position.x;
         const dz = clickTarget.z - traveller.position.z;
@@ -575,19 +637,20 @@ export function createWorldStage({ materials, audio, progress, onOpenSpot, onCol
       setGroundLightPools(pools, 2.75, lights.nightMix * 0.95);
 
       const mode = VIEW_MODES[viewIdx];
-      let dist = 8.4;
-      let height = 5.2;
+      const aspectBoost = camera.aspect < 0.9 ? Math.min(1.55, 0.92 / Math.max(0.45, camera.aspect)) : 1;
+      let dist = 8.4 * aspectBoost * zoomFactor;
+      let height = 5.2 * aspectBoost * zoomFactor;
       let lookY = 0.45;
       let focusX = traveller.position.x;
       let focusZ = traveller.position.z;
 
       if (mode === 'macro') {
-        dist = 4.6;
-        height = 2.5;
+        dist = 4.6 * aspectBoost * zoomFactor;
+        height = 2.5 * aspectBoost * zoomFactor;
         lookY = 0.55;
       } else if (mode === 'overview') {
-        dist = 13.8;
-        height = 10.4;
+        dist = 13.8 * aspectBoost * zoomFactor;
+        height = 10.4 * aspectBoost * zoomFactor;
         lookY = 0.2;
         focusX = 0;
         focusZ = 0;

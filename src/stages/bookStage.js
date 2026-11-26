@@ -315,6 +315,20 @@ export function createBookStage({ materials, audio, onSceneChange, onEnterScene 
     dragStartPage = targetPage;
   }
 
+  function computeBookCamera(camera) {
+    const aspect = Math.max(0.4, camera.aspect || 1);
+    const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+    const halfWidthNeeded = 2.9;
+    const minDistForWidth = halfWidthNeeded / (Math.tan(halfFov) * aspect);
+    const baseDist = Math.max(8.4, minDistForWidth);
+    const scale = baseDist / 8.4;
+    return {
+      camY: 5.0 * scale,
+      camZ: 6.8 * scale,
+      lookY: aspect < 1.0 ? 0.85 : 1.12,
+    };
+  }
+
   function onPointerMove(e, dom, camera) {
     if (!active) return;
     const rect = dom.getBoundingClientRect();
@@ -323,7 +337,9 @@ export function createBookStage({ materials, audio, onSceneChange, onEnterScene 
 
     if (dragging) {
       const dx = e.clientX - dragStartX;
-      if (Math.abs(dx) > 48 && !didDragFlip) {
+      const dy = e.clientY - dragStartY;
+      const thresh = e.pointerType === 'touch' ? 26 : 44;
+      if (Math.abs(dx) > thresh && Math.abs(dx) > Math.abs(dy) * 1.15 && !didDragFlip) {
         didDragFlip = true;
         setPage(dragStartPage + (dx < 0 ? 1 : -1));
       }
@@ -380,9 +396,9 @@ export function createBookStage({ materials, audio, onSceneChange, onEnterScene 
       active = true;
       buildBook(book, sceneIdx);
       camera.fov = 34;
-      const zDist = camera.aspect < 1.35 ? 6.8 + (1.35 - camera.aspect) * 3.8 : 6.8;
-      camera.position.set(0, 5.0, zDist);
-      camera.lookAt(0, 1.12, 0.35);
+      const { camY, camZ, lookY } = computeBookCamera(camera);
+      camera.position.set(0, camY, camZ);
+      camera.lookAt(0, lookY, 0.35);
       camera.updateProjectionMatrix();
       onSceneChange?.(book.scenes[targetPage], targetPage);
     },
@@ -406,8 +422,12 @@ export function createBookStage({ materials, audio, onSceneChange, onEnterScene 
     update(dt, elapsed, camera, lights) {
       applyBookKinematics(dt, elapsed);
       lights.setAccentPosition(0, 2.2, 1.4);
-      camera.position.x += (Math.sin(elapsed * 0.4) * 0.08 - camera.position.x) * 0.05;
-      camera.lookAt(0, 1.12, 0.35);
+      const { camY, camZ, lookY } = computeBookCamera(camera);
+      const k = 1 - Math.exp(-7 * dt);
+      camera.position.x += (Math.sin(elapsed * 0.4) * 0.08 - camera.position.x) * k;
+      camera.position.y += (camY - camera.position.y) * k;
+      camera.position.z += (camZ - camera.position.z) * k;
+      camera.lookAt(0, lookY, 0.35);
     },
   };
 }

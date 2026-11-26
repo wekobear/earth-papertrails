@@ -2,7 +2,7 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Earth Papertrails · 地球折纸足迹</title>
     <link rel="icon" href="data:," />
   </head>
@@ -28,7 +28,7 @@
         <div class="top-actions">
           <button class="pill-btn" id="btn-passport" title="查看我的地球足迹护照">
             <span class="passport-mini-icon">🪪</span>
-            <span>Passport</span>
+            <span class="passport-label">Passport</span>
             <span class="badge-count" id="passport-count">0/48</span>
           </button>
           <button class="icon-btn" id="btn-daynight" title="切换昼夜 (N)">
@@ -40,15 +40,18 @@
         </div>
       </header>
 
-      <!-- Stage 1: Bookshelf Speech-Bubble Tooltip & Subtle Bottom Hint -->
+      <!-- Stage 1: Bookshelf Speech-Bubble Tooltip, Mobile Quick Strip & Footer -->
       <div class="stage-layer" id="ui-bookshelf">
         <div class="book-tooltip hidden" id="book-tooltip">
           <div class="tooltip-tail"></div>
           <div class="tooltip-title" id="tooltip-title">《东方物语》</div>
           <div class="tooltip-sub" id="tooltip-sub">8/12 Footprints · Click to Open</div>
+          <button type="button" class="tooltip-open-btn" id="btn-tooltip-open">翻开绘本 →</button>
         </div>
+        <div class="mobile-book-strip" id="mobile-book-strip"></div>
         <div class="shelf-footer-hint">
-          悬停书脊查看足迹 · 点击取出书本展开 · 点击地球仪打开护照 · 点击台灯切换昼夜
+          <span class="desktop-only">悬停书脊查看足迹 · 点击取出书本展开 · 点击地球仪打开护照 · 点击台灯切换昼夜</span>
+          <span class="mobile-only">点选绘本预览 · 左右滑动书架 · 点地球仪看护照</span>
         </div>
       </div>
 
@@ -75,30 +78,42 @@
               <span class="cta-arrow">↗</span>
             </button>
           </div>
-          <div class="book-hint-sub">左右箭头 / 拖拽翻页 · 直接点击立体折纸场景亦可进入</div>
+          <div class="book-hint-sub">
+            <span class="desktop-only">左右箭头 / 拖拽翻页 · 直接点击立体折纸场景亦可进入</span>
+            <span class="mobile-only">左右滑动翻页 · 点击立体场景或按钮进入</span>
+          </div>
         </div>
       </div>
 
       <!-- Stage 3: Walkable Paper World HUD -->
       <div class="stage-layer hidden" id="ui-world">
         <div class="world-scene-badge">
-          <div class="badge-coords" id="world-coords">34.9671° N, 135.7727° E</div>
-          <div class="badge-name" id="world-name">京都 · 伏见鸟居</div>
+          <div class="badge-header-line">
+            <div class="badge-name" id="world-name">京都 · 伏见鸟居</div>
+            <div class="badge-coords" id="world-coords">34.9671° N, 135.7727° E</div>
+          </div>
           <div class="badge-spots" id="world-spots-pills"></div>
           <div class="badge-scrap" id="world-scrap-status"></div>
         </div>
 
         <div class="world-controls-bar">
-          <button class="pill-btn secondary" id="btn-back-book">← 收回折纸绘本 (ESC)</button>
-          <button class="pill-btn secondary" id="btn-camera-view">视角: 跟随 (V)</button>
+          <button class="pill-btn secondary" id="btn-back-book">← 绘本</button>
+          <button class="pill-btn secondary" id="btn-camera-view">视角: 跟随</button>
+        </div>
+
+        <!-- Mobile Virtual Thumb Joystick -->
+        <div class="mobile-joystick" id="mobile-joystick" aria-label="移动摇杆">
+          <div class="joystick-nub" id="joystick-nub"></div>
         </div>
 
         <div class="walk-hint" id="walk-hint">
-          WASD / 点击行走 · 点击足迹点或走近触发明信片 · 拾取压花纪念 · 右键旋转 · V 视角 · N 昼夜
+          <span class="desktop-only">WASD / 点击行走 · 点击足迹点或走近触发明信片 · 拾取压花纪念 · 右键旋转 · V 视角 · N 昼夜</span>
+          <span class="mobile-only">摇杆 / 点地面行走 · 双指旋转缩放 · 点地标集章</span>
         </div>
 
-        <!-- Perforated Cardstock Postcard Drawer (matching ui_04_night_footprint_postcard.png) -->
+        <!-- Perforated Cardstock Postcard Drawer -->
         <aside class="postcard-drawer hidden" id="postcard-drawer">
+          <div class="drawer-grabber"></div>
           <button class="drawer-close" id="btn-close-drawer" title="关闭">✕</button>
 
           <div class="postcard-top-row">
@@ -127,7 +142,6 @@
           </div>
           <p class="postcard-story" id="card-story"></p>
 
-          <!-- Visual Keepsake Collage: Thumbtacked Polaroid + Washi-taped Botanical Keepsake -->
           <div class="collage-row">
             <label class="polaroid-card" id="polaroid-trigger" title="点击上传你的真实旅行照片">
               <span class="brass-tack"></span>

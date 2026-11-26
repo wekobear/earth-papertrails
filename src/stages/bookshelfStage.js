@@ -205,6 +205,11 @@ export function createBookshelfStage({
   let mouseX = 0;
   let mouseY = 0;
   let active = false;
+  let panX = -0.35;
+  let touchDragging = false;
+  let touchMoved = false;
+  let touchStartX = 0;
+  let touchStartPanX = -0.35;
 
   const projVec = new THREE.Vector3();
 
@@ -253,7 +258,15 @@ export function createBookshelfStage({
 
       spineMesh.userData.bookIndex = idx;
       frontCover.userData.bookIndex = idx;
-      hitMeshes.push(spineMesh, frontCover);
+      // Forgiving touch hit volume per book slot
+      const hitPad = new THREE.Mesh(
+        new THREE.BoxGeometry(0.56, 1.84, 1.36),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      hitPad.position.set(0, bh / 2, 0.06);
+      hitPad.userData.bookIndex = idx;
+      pivot.add(hitPad);
+      hitMeshes.push(spineMesh, frontCover, hitPad);
 
       booksContainer.add(slot);
       bookSlots.push({
@@ -306,8 +319,51 @@ export function createBookshelfStage({
     dom.style.cursor = nextIdx !== -1 || propHits.length > 0 ? 'pointer' : 'default';
   }
 
+  function computeFraming(camera) {
+    const aspect = Math.max(0.4, camera.aspect || 1);
+    if (aspect >= 1.1) {
+      return { baseZ: 8.9, centerX: 0.35, centerY: 1.68 };
+    }
+    const halfFovRad = THREE.MathUtils.degToRad(camera.fov / 2);
+    const halfW = 3.15;
+    const baseZ = Math.max(9.5, halfW / (Math.tan(halfFovRad) * Math.max(0.42, aspect)));
+    return { baseZ, centerX: panX, centerY: 1.62 };
+  }
+
+  function triggerOpenBook(idx) {
+    if (idx < 0 || idx >= currentBooks.length || pullingIdx !== -1) return;
+    const picked = currentBooks[idx];
+    if (picked.isCreator) {
+      audio.playBookPull();
+      onCreateBook?.();
+      return;
+    }
+    pullingIdx = idx;
+    audio.playBookPull();
+    setTimeout(() => {
+      onSelectBook?.(picked);
+    }, 420);
+  }
+
+  function previewBook(idx, camera, dom) {
+    if (idx < 0 || idx >= currentBooks.length) return;
+    hoveredIdx = idx;
+    audio.playHover();
+    const b = currentBooks[idx];
+    const screenPos = dom && camera ? getScreenPosForSlot(bookSlots[idx], camera, dom) : null;
+    onHoverBook?.(b, countBookStamps(progress, b), screenPos);
+  }
+
   function onPointerMove(e, dom, camera) {
     if (!active) return;
+    if (e.pointerType === 'touch') {
+      if (touchDragging) {
+        const dx = e.clientX - touchStartX;
+        if (Math.abs(dx) > 8) touchMoved = true;
+        panX = Math.max(-0.75, Math.min(2.35, touchStartPanX - dx * 0.012));
+      }
+      return;
+    }
     const rect = dom.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -321,20 +377,19 @@ export function createBookshelfStage({
     const rect = dom.getBoundingClientRect();
     pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    if (e.pointerType === 'touch') {
+      touchDragging = true;
+      touchMoved = false;
+      touchStartX = e.clientX;
+      touchStartPanX = panX;
+      return;
+    }
+
     updateRaycast(camera, dom);
 
     if (hoveredIdx !== -1) {
-      const picked = currentBooks[hoveredIdx];
-      if (picked.isCreator) {
-        audio.playBookPull();
-        onCreateBook?.();
-        return;
-      }
-      pullingIdx = hoveredIdx;
-      audio.playBookPull();
-      setTimeout(() => {
-        onSelectBook?.(picked);
-      }, 420);
+      triggerOpenBook(hoveredIdx);
       return;
     }
 
@@ -352,13 +407,55 @@ export function createBookshelfStage({
     }
   }
 
+  function onPointerUp(e, dom, camera) {
+    if (!active) return;
+    if (e.pointerType === 'touch' && touchDragging) {
+      touchDragging = false;
+      if (!touchMoved && pullingIdx === -1) {
+        const rect = dom.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+        const bookHits = raycaster.intersectObjects(hitMeshes, false);
+        const tappedIdx = bookHits.length > 0 ? bookHits[0].object.userData.bookIndex : -1;
+        if (tappedIdx !== -1) {
+          if (hoveredIdx === tappedIdx) {
+            triggerOpenBook(tappedIdx);
+          } else {
+            previewBook(tappedIdx, camera, dom);
+          }
+          return;
+        }
+        const propHits = raycaster.intersectObjects(interactiveProps, false);
+        if (propHits.length > 0) {
+          const act = propHits[0].object.userData.action;
+          if (act === 'passport') {
+            audio.playHover();
+            onOpenPassport?.();
+          } else if (act === 'daynight') {
+            audio.playHover();
+            onToggleNight?.();
+          }
+        }
+      }
+    }
+  }
+
   return {
     group,
     setBooks,
+    previewBookByIndex(idx, camera, dom) {
+      previewBook(idx, camera, dom);
+    },
+    openHoveredBook() {
+      if (hoveredIdx !== -1) triggerOpenBook(hoveredIdx);
+    },
     enter(camera) {
       active = true;
       hoveredIdx = -1;
       pullingIdx = -1;
+      touchDragging = false;
+      panX = -0.35;
       for (const s of bookSlots) {
         s.hoverT = 0;
         s.pullT = 0;
@@ -366,29 +463,32 @@ export function createBookshelfStage({
         s.slot.rotation.set(0, 0, 0);
       }
       camera.fov = 38;
-      const distZ = camera.aspect < 1.4 ? 8.9 + (1.4 - camera.aspect) * 6.2 : 8.9;
-      camera.position.set(0.35, 1.75, distZ);
-      camera.lookAt(0.35, 1.68, 0);
+      const { baseZ, centerX, centerY } = computeFraming(camera);
+      camera.position.set(centerX, centerY + 0.08, baseZ);
+      camera.lookAt(centerX, centerY, 0);
       camera.updateProjectionMatrix();
     },
     leave() {
       active = false;
       hoveredIdx = -1;
       pullingIdx = -1;
+      touchDragging = false;
     },
     onPointerMove,
     onPointerDown,
+    onPointerUp,
     update(dt, elapsed, camera, lights) {
       earthSphere.rotation.y = elapsed * 0.24;
       lights.setAccentPosition(3.15, -0.2, 0.4);
 
-      const baseZ = camera.aspect < 1.4 ? 8.9 + (1.4 - camera.aspect) * 6.2 : 8.9;
-      const targetCamX = 0.35 + mouseX * 0.28;
-      const targetCamY = 1.75 + mouseY * 0.14;
-      camera.position.x += (targetCamX - camera.position.x) * (1 - Math.exp(-5 * dt));
-      camera.position.y += (targetCamY - camera.position.y) * (1 - Math.exp(-5 * dt));
-      camera.position.z += (baseZ - camera.position.z) * (1 - Math.exp(-5 * dt));
-      camera.lookAt(0.35, 1.68, 0);
+      const { baseZ, centerX, centerY } = computeFraming(camera);
+      const isNarrow = camera.aspect < 1.1;
+      const targetCamX = centerX + (isNarrow ? 0 : mouseX * 0.28);
+      const targetCamY = centerY + 0.08 + (isNarrow ? 0 : mouseY * 0.14);
+      camera.position.x += (targetCamX - camera.position.x) * (1 - Math.exp(-8 * dt));
+      camera.position.y += (targetCamY - camera.position.y) * (1 - Math.exp(-8 * dt));
+      camera.position.z += (baseZ - camera.position.z) * (1 - Math.exp(-8 * dt));
+      camera.lookAt(camera.position.x, centerY, 0);
 
       for (const s of bookSlots) {
         const isHovered = s.idx === hoveredIdx;
