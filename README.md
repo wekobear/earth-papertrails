@@ -1,5 +1,7 @@
 # Earth Papertrails · 地球折纸足迹
 
+**[Live Preview · 在线预览](https://wekobear.github.io/earth-papertrails/)**
+
 An interactive 3D origami pop-up book and miniature papercraft world for collecting and journaling your real-world travel footprints.
 
 ## Three-Stage Interactive Experience
